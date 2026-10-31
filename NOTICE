@@ -1,0 +1,20 @@
+Sunlight & Shadow Calculator
+Copyright (c) 2026 Sunlight & Shadow Calculator contributors
+
+This project is released under the MIT License. See LICENSE.
+
+The MIT License covers the source code of this project only. The map data,
+tiles, and third-party services used at runtime are covered by their own
+licences, which are listed in full in ATTRIBUTION.md. In summary:
+
+  OpenStreetMap data          ODbL 1.0
+  Protomaps tiles             ODbL 1.0
+  OpenFreeMap                 ODbL 1.0
+  OpenMapTiles schema         CC-BY 4.0
+  Natural Earth               Public domain
+  MapLibre GL JS              BSD-3-Clause
+  NOAA solar equations        Public domain
+
+If you deploy or redistribute this application, you must preserve the
+attribution shown in the app's "Data & credits" panel and described in
+ATTRIBUTION.md.
