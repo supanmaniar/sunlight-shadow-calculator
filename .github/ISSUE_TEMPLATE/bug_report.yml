@@ -1,0 +1,39 @@
+name: Bug report
+description: Something is wrong with the calculator
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The URL encodes the full app state, so pasting it
+        is the fastest way to reproduce the issue.
+  - type: input
+    id: url
+    attributes:
+      label: URL
+      description: The full URL from your browser.
+      placeholder: https://.../?lat=51.50070&lng=-0.12460&...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened?
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 130, Safari 18, Firefox 132
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Drag an image here if the issue is visual.

@@ -1,26 +1,53 @@
 {
-  "name": "suncalc-scaffold",
-  "version": "0.1.0",
+  "name": "sunlight-shadow-calculator",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "sync:maplibre-worker": "cp node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs public/maplibre/maplibre-gl-worker.mjs",
+    "postinstall": "npm run sync:maplibre-worker"
   },
   "dependencies": {
+    "@mapbox/vector-tile": "^3.0.0",
+    "maplibre-gl": "^6.16.0",
     "next": "16.4.3",
+    "pbf": "^5.1.2",
+    "pmtiles": "^4.5.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
-    "@types/node": "^20",
+    "@types/node": "^22.20.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
-    "typescript": "^5"
-  }
+    "typescript": "^5",
+    "vitest": "^5.0.5"
+  },
+  "description": "3D sunlight and shadow calculator for any place and moment on Earth.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/supanmaniar/sunlight-shadow-calculator.git"
+  },
+  "homepage": "https://github.com/supanmaniar/sunlight-shadow-calculator",
+  "keywords": [
+    "sun",
+    "shadow",
+    "3d",
+    "maplibre",
+    "solar",
+    "photography",
+    "golden-hour",
+    "osm"
+  ]
 }
