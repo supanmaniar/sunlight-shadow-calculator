@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "sync:maplibre-worker": "cp node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs public/maplibre/maplibre-gl-worker.mjs",
     "postinstall": "npm run sync:maplibre-worker"
   },
