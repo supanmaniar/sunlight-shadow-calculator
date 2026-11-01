@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Attribution } from "@/components/shadow/Attribution";
 import { Compass } from "@/components/shadow/Compass";
+import { SavedLocations } from "@/components/shadow/SavedLocations";
 import { ShadowMap } from "@/components/shadow/ShadowMap";
 import { geocode, type GeocodeResult } from "@/lib/shadow/geocode";
 import type { SceneData } from "@/lib/shadow/osm";
@@ -14,6 +15,13 @@ import {
   formatTime,
 } from "@/lib/format";
 import { getSunPosition, getSunTimes, zonedTimeToUtc } from "@/lib/sun";
+import {
+  deleteLocation,
+  loadSaved,
+  saveLocation,
+  type SavedLocation,
+} from "@/lib/savedLocations";
+import { timeZoneAbbreviation, timeZoneFor } from "@/lib/timeZone";
 import { useNowMs } from "@/lib/useNow";
 
 function subscribeToNothing() {
@@ -49,15 +57,6 @@ function localDateKey(date: Date): string {
 
 function localTimeKey(date: Date): string {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
-function timeZoneFor(lat: number, lng: number): string {
-  // Approximate zone from longitude; good enough for display and sun times.
-  // Note: Etc/GMT signs are inverted relative to UTC offsets (Etc/GMT-2 is UTC+2).
-  const offsetHours = Math.round(lng / 15);
-  const sign = offsetHours >= 0 ? "-" : "+";
-  const abs = Math.abs(offsetHours);
-  return `Etc/GMT${sign}${abs}`;
 }
 
 /**
@@ -104,6 +103,10 @@ function ShadowExplorerClient() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const [playing, setPlaying] = useState(false);
+  // Mobile only: secondary controls are hidden by default so the map is visible.
+  const [showMore, setShowMore] = useState(false);
+  const [saved, setSaved] = useState<SavedLocation[]>(() => loadSaved());
+  const [showYearPaths, setShowYearPaths] = useState(false);
 
   const timeZone = useMemo(
     () => timeZoneFor(state.lat, state.lng),
@@ -233,6 +236,19 @@ function ShadowExplorerClient() {
     goTo(result.latitude, result.longitude);
   };
 
+  const handleSave = (name: string) => {
+    const { locations } = saveLocation(name, state);
+    setSaved(locations);
+  };
+
+  const handleOpenSaved = (location: SavedLocation) => {
+    setState(location.state);
+  };
+
+  const handleDeleteSaved = (id: string) => {
+    setSaved(deleteLocation(id));
+  };
+
   const copyLink = async () => {
     await navigator.clipboard.writeText(window.location.href);
     setCopied(true);
@@ -254,6 +270,7 @@ function ShadowExplorerClient() {
           fov={state.fov}
           bearing={state.bearing}
           pitch={state.pitch}
+          showYearPaths={showYearPaths}
           positionAt={positionAt}
           onCameraChange={({ pitch, bearing, zoom }) =>
             setState((prev) =>
@@ -268,10 +285,12 @@ function ShadowExplorerClient() {
       </div>
 
       {/* Top bar */}
-      <header className="pointer-events-none relative z-10 flex flex-wrap items-start justify-between gap-3 p-4">
-        <div className="pointer-events-auto rounded-xl bg-stone-900/85 px-4 py-3 backdrop-blur">
-          <h1 className="text-lg font-semibold tracking-tight">Sunlight &amp; Shadow Calculator</h1>
-          <p className="text-xs text-stone-400">
+      <header className="pointer-events-none relative z-10 flex flex-col gap-2 p-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-3 sm:p-4">
+        <div className="pointer-events-auto rounded-xl bg-stone-900/85 px-3 py-2 backdrop-blur sm:px-4 sm:py-3">
+          <h1 className="text-sm font-semibold tracking-tight sm:text-lg">
+            Sunlight &amp; Shadow Calculator
+          </h1>
+          <p className="hidden text-xs text-stone-400 sm:block">
             Find the perfect light &amp; shade, anywhere on Earth.
           </p>
         </div>
@@ -307,7 +326,7 @@ function ShadowExplorerClient() {
               aria-label="Search a place or paste coordinates"
               autoComplete="off"
               spellCheck={false}
-              className="w-64 rounded-lg border border-stone-700 bg-stone-900/85 px-3 py-2 text-sm outline-none backdrop-blur placeholder:text-stone-500 focus:border-amber-500"
+              className="min-w-0 flex-1 rounded-lg border border-stone-700 bg-stone-900/85 px-3 py-2 text-sm outline-none backdrop-blur placeholder:text-stone-500 focus:border-amber-500 sm:w-64 sm:flex-none"
             />
             <button
               type="button"
@@ -323,7 +342,7 @@ function ShadowExplorerClient() {
           </div>
 
           {results.length > 0 && (
-            <ul className="max-h-64 w-80 overflow-auto rounded-lg border border-stone-700 bg-stone-900/95 text-sm shadow-xl backdrop-blur">
+            <ul className="max-h-56 w-full overflow-auto rounded-lg border border-stone-700 bg-stone-900/95 text-sm shadow-xl backdrop-blur sm:max-h-64 sm:w-80">
               {results.map((result, index) => (
                 <li key={`${result.latitude},${result.longitude},${result.label}`}>
                   <button
@@ -346,13 +365,13 @@ function ShadowExplorerClient() {
             </ul>
           )}
 
-          <div className="flex flex-wrap gap-1.5">
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
             {PRESETS.map((preset) => (
               <button
                 key={preset.label}
                 type="button"
                 onClick={() => goTo(preset.lat, preset.lng)}
-                className="rounded-full border border-stone-700 bg-stone-900/85 px-2.5 py-1 text-xs backdrop-blur transition-colors hover:border-amber-500 hover:text-amber-300"
+                className="shrink-0 rounded-full border border-stone-700 bg-stone-900/85 px-2.5 py-1 text-xs backdrop-blur transition-colors hover:border-amber-500 hover:text-amber-300"
               >
                 {preset.label}
               </button>
@@ -361,8 +380,8 @@ function ShadowExplorerClient() {
         </div>
       </header>
 
-      {/* Sun readout */}
-      <div className="pointer-events-auto absolute right-4 top-40 z-10 w-64 rounded-xl bg-stone-900/85 p-4 text-sm backdrop-blur">
+      {/* Sun readout. Collapsible on mobile so it does not cover the map. */}
+      <div className="pointer-events-auto absolute right-2 top-36 z-10 w-40 rounded-xl bg-stone-900/85 p-2 text-[11px] backdrop-blur sm:right-4 sm:top-40 sm:w-64 sm:p-4 sm:text-sm">
         <div className="flex items-center justify-between">
           <span className="text-stone-400">Sun</span>
           <span
@@ -377,7 +396,7 @@ function ShadowExplorerClient() {
             {sunUp ? (goldenHour ? "Golden hour" : "Daylight") : "Below horizon"}
           </span>
         </div>
-        <dl className="mt-3 space-y-1.5 font-mono text-xs">
+        <dl className="mt-2 space-y-1 font-mono text-[11px] sm:mt-3 sm:space-y-1.5 sm:text-xs">
           <div className="flex justify-between">
             <dt className="text-stone-400">Azimuth</dt>
             <dd>
@@ -400,6 +419,26 @@ function ShadowExplorerClient() {
             <dt className="text-stone-400">Day length</dt>
             <dd>{formatDuration(times.dayLengthMinutes)}</dd>
           </div>
+          <div className="flex justify-between border-t border-stone-800 pt-1.5">
+            <dt className="text-stone-400">Time zone</dt>
+            <dd title={timeZone}>
+              {timeZoneAbbreviation(instant, timeZone)}
+            </dd>
+          </div>
+          {scene?.terrain && (
+            <div className="flex justify-between">
+              <dt className="text-stone-400">Ground</dt>
+              <dd title={`Relief ${scene.terrain.relief} m across the area`}>
+                {Math.round(scene.terrain.elevation)} m
+                {scene.terrain.relief >= 5 && (
+                  <span className="text-stone-500">
+                    {" "}
+                    ±{Math.round(scene.terrain.relief / 2)}
+                  </span>
+                )}
+              </dd>
+            </div>
+          )}
         </dl>
 
         {scene && (
@@ -411,14 +450,15 @@ function ShadowExplorerClient() {
         {sceneError && <p className="mt-2 text-xs text-red-400">{sceneError}</p>}
       </div>
 
-      {/* Bottom controls */}
-      <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-10 p-4">
-        <div className="mx-auto flex max-w-4xl flex-col gap-3 rounded-xl bg-stone-900/90 p-4 backdrop-blur">
-          <div className="flex items-center gap-3">
+      {/* Bottom controls. On mobile the secondary rows collapse behind a
+          toggle so the map stays visible; the time slider is always available. */}
+      <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-10 p-2 sm:p-4">
+        <div className="mx-auto flex max-w-4xl flex-col gap-2 rounded-xl bg-stone-900/90 p-2.5 backdrop-blur sm:gap-3 sm:p-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               type="button"
               onClick={() => setPlaying((prev) => !prev)}
-              className="w-20 rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-stone-950 hover:bg-amber-400"
+              className="w-16 shrink-0 rounded-lg bg-amber-500 px-2 py-1.5 text-xs font-medium text-stone-950 hover:bg-amber-400 sm:w-20 sm:px-3 sm:text-sm"
             >
               {playing ? "Pause" : "Play"}
             </button>
@@ -441,10 +481,24 @@ function ShadowExplorerClient() {
               className="flex-1 accent-amber-500"
               aria-label="Time of day"
             />
-            <span className="w-14 text-right font-mono text-sm">{state.time}</span>
+            <span className="w-11 shrink-0 text-right font-mono text-xs sm:w-14 sm:text-sm">
+              {state.time}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowMore((prev) => !prev)}
+              aria-expanded={showMore}
+              aria-controls="more-controls"
+              className="shrink-0 rounded-lg border border-stone-700 px-2 py-1.5 text-xs hover:border-amber-500 sm:hidden"
+            >
+              {showMore ? "Less" : "More"}
+            </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-sm">
+          <div
+            id="more-controls"
+            className={`${showMore ? "flex" : "hidden"} flex-wrap items-center gap-2 text-xs sm:flex sm:gap-3 sm:text-sm`}
+          >
             <label className="flex items-center gap-2">
               <span className="text-stone-400">Date</span>
               <input
@@ -512,6 +566,13 @@ function ShadowExplorerClient() {
             </label>
 
             <div className="relative ml-auto flex items-center gap-2">
+              <SavedLocations
+                locations={saved}
+                onSave={handleSave}
+                onOpen={handleOpenSaved}
+                onDelete={handleDeleteSaved}
+                suggestion={`${state.lat.toFixed(4)}, ${state.lng.toFixed(4)}`}
+              />
               <Attribution />
               <button
                 type="button"
@@ -527,7 +588,9 @@ function ShadowExplorerClient() {
               named viewpoint. Shadows only read correctly from a viewpoint you
               choose, so this is a first-class control rather than a hidden
               right-drag gesture. */}
-          <div className="flex flex-wrap items-center gap-4 border-t border-stone-800 pt-3">
+          <div
+            className={`${showMore ? "flex" : "hidden"} flex-wrap items-center gap-3 border-t border-stone-800 pt-2 sm:flex sm:gap-4 sm:pt-3`}
+          >
             <Compass
               bearing={state.bearing}
               pitch={state.pitch}
@@ -549,7 +612,7 @@ function ShadowExplorerClient() {
                   aria-pressed={
                     Math.abs(state.bearing - viewpoint.bearing) < 1
                   }
-                  className={`w-9 rounded-md border px-1 py-1 text-xs transition-colors ${
+                  className={`w-8 rounded-md border px-1 py-1 text-[11px] transition-colors sm:w-9 sm:text-xs ${
                     Math.abs(state.bearing - viewpoint.bearing) < 1
                       ? "border-amber-500 bg-amber-500/15 text-amber-300"
                       : "border-stone-700 hover:border-amber-500 hover:text-amber-300"
@@ -568,7 +631,7 @@ function ShadowExplorerClient() {
                   bearing: Math.round(position.azimuth),
                 }))
               }
-              className="rounded-lg border border-stone-700 px-2.5 py-1 text-xs hover:border-amber-500 hover:text-amber-300"
+              className="whitespace-nowrap rounded-lg border border-stone-700 px-2 py-1 text-[11px] hover:border-amber-500 hover:text-amber-300 sm:px-2.5 sm:text-xs"
               title="Turn the camera to look towards the sun"
             >
               Face the sun
@@ -576,10 +639,23 @@ function ShadowExplorerClient() {
 
             <button
               type="button"
+              onClick={() => setShowYearPaths((prev) => !prev)}
+              aria-pressed={showYearPaths}
+              title="Show the sun's path on the 21st of every month"
+              className={`whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] transition-colors sm:px-2.5 sm:text-xs ${
+                showYearPaths
+                  ? "border-amber-500 bg-amber-500/15 text-amber-300"
+                  : "border-stone-700 hover:border-amber-500 hover:text-amber-300"
+              }`}
+            >
+              Year paths
+            </button>
+            <button
+              type="button"
               onClick={() =>
                 setState((prev) => ({ ...prev, bearing: -20, pitch: 60 }))
               }
-              className="rounded-lg border border-stone-700 px-2.5 py-1 text-xs hover:border-amber-500 hover:text-amber-300"
+              className="whitespace-nowrap rounded-lg border border-stone-700 px-2 py-1 text-[11px] hover:border-amber-500 hover:text-amber-300 sm:px-2.5 sm:text-xs"
             >
               Reset view
             </button>

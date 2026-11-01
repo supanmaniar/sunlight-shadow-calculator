@@ -8,7 +8,9 @@ import {
   buildBuildingCollection,
   buildShadowCollection,
   buildSunPath,
+  buildSunPathRange,
   buildTreeCollection,
+  monthlyDates,
 } from "@/lib/shadow/geojson";
 import type { SunPosition } from "@/lib/sun";
 
@@ -17,6 +19,15 @@ const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 // Bundlers cannot resolve MapLibre's worker automatically, so it is served from
 // `public/` (kept in sync by the `sync:maplibre-worker` npm script).
 setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
+
+/**
+ * Radius for the sun-path arc. A fixed radius looks like a dot when zoomed out
+ * and overflows the loaded buildings when zoomed in, so scale it with the scene
+ * and keep it comfortably inside the data.
+ */
+function sunPathRadius(sceneRadius: number): number {
+  return Math.max(60, Math.min(sceneRadius * 0.55, 400));
+}
 
 const EMPTY: GeoJSON.FeatureCollection = {
   type: "FeatureCollection",
@@ -31,6 +42,8 @@ type ShadowMapProps = {
   fov: number;
   bearing: number;
   pitch: number;
+  /** When true, draw the sun path for the 21st of every month. */
+  showYearPaths: boolean;
   positionAt: (date: Date) => SunPosition;
   onCameraChange?: (camera: { pitch: number; bearing: number; zoom: number }) => void;
 };
@@ -43,6 +56,7 @@ export function ShadowMap({
   fov,
   bearing,
   pitch,
+  showYearPaths,
   positionAt,
   onCameraChange,
 }: ShadowMapProps) {
@@ -84,6 +98,18 @@ export function ShadowMap({
       map.addSource("scene-buildings", { type: "geojson", data: EMPTY });
       map.addSource("scene-trees", { type: "geojson", data: EMPTY });
       map.addSource("scene-shadows", { type: "geojson", data: EMPTY });
+      map.addSource("sun-path-year", { type: "geojson", data: EMPTY });
+      map.addLayer({
+        id: "sun-path-year",
+        type: "line",
+        source: "sun-path-year",
+        paint: {
+          "line-color": "#fbbf24",
+          "line-width": 1.6,
+          "line-opacity": 0.55,
+        },
+      });
+
       map.addSource("sun-path", { type: "geojson", data: EMPTY });
 
       map.addLayer({
@@ -271,12 +297,40 @@ export function ShadowMap({
         : EMPTY,
     );
 
+    const yearPaths = map.getSource("sun-path-year") as
+      | GeoJSONSource
+      | undefined;
+
+    if (scene && showYearPaths) {
+      const year = Number(dateKey.slice(0, 4)) || new Date().getUTCFullYear();
+      const arcs = buildSunPathRange(
+        scene.center[1],
+        scene.center[0],
+        monthlyDates(year),
+        positionAt,
+        sunPathRadius(scene.radius),
+      );
+      yearPaths?.setData({
+        type: "FeatureCollection",
+        features: arcs
+          .filter((arc) => arc.points.length > 1)
+          .map((arc) => ({
+            type: "Feature" as const,
+            properties: { date: arc.date },
+            geometry: { type: "LineString" as const, coordinates: arc.points },
+          })),
+      });
+    } else {
+      yearPaths?.setData(EMPTY);
+    }
+
     if (scene) {
       const points = buildSunPath(
         scene.center[1],
         scene.center[0],
         dateKey,
         positionAt,
+        sunPathRadius(scene.radius),
       );
       sunPath?.setData({
         type: "FeatureCollection",
@@ -321,7 +375,7 @@ export function ShadowMap({
     } else {
       marker?.setData(EMPTY);
     }
-  }, [scene, position, dateKey, positionAt, ready]);
+  }, [scene, position, dateKey, positionAt, ready, showYearPaths]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }

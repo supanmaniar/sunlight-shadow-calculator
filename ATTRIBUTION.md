@@ -66,10 +66,21 @@ request per pause in typing, aborts superseded requests, and can be pointed at a
 self-hosted Photon instance by changing `PHOTON_URL` in
 `src/lib/shadow/geocode.ts`.
 
+### AWS Terrain Tiles
+
+- **Provides:** ground elevation, so hills and valleys are reflected in the
+  scene and the reported ground height is real.
+- **Licence:** the tiles are derived from public sources; see the registry entry
+  for the per-source terms.
+- **Link:** https://registry.opendata.aws/terrain-tiles/
+- **Encoding:** Terrarium PNG, `(R * 256 + G + B / 256) - 32768` metres.
+
 ### Overpass API
 
 - **Provides:** individual tree nodes (`natural=tree`) with height and crown
-  data, used to enrich the Protomaps buildings.
+  data. **No longer used at runtime** — Overpass was too slow and too often
+  rate-limited to be reliable, so tree canopy now comes from Protomaps landuse
+  polygons. Kept here for transparency and in case it is reintroduced.
 - **Licence:** ODbL 1.0 (data)
 - **Link:** https://overpass-api.de
 - **Usage policy:** https://operations.osmfoundation.org/policies/api/

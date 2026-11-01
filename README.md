@@ -31,8 +31,17 @@ where the light will fall.
   viewpoint buttons, or "Face the sun"; adjust tilt and field of view. The
   viewpoint is encoded in the URL, so a shared link opens at the same angle.
 - **Golden hour and twilight** — sunrise, sunset, civil/nautical/astronomical
-  twilight, and golden/blue hour windows.
-- **Trees from OSM** — real tree nodes with crown radius and height.
+  twilight, and golden/blue hour windows, in the location's real time zone
+  with daylight saving applied.
+- **Ground elevation** — real terrain height and local relief, so hills and
+  valleys are not flattened.
+- **Year paths** — overlay the sun's arc for the 21st of every month to see how
+  the light shifts across the year.
+- **Saved locations** — keep a shot list in the browser, including the camera
+  angle and time, and reopen it later.
+- **Works on a phone** — the controls collapse so the map stays visible.
+- **Tree canopy** — real OSM vegetation areas (wood, scrub, orchard) sampled as
+  individual crowns, so parks and avenues cast textured shade.
 - **Shareable URLs** — location, date, time, camera, field of view, and area
   radius are all encoded in the URL.
 - **Place search** — type-ahead geocoding via Photon, biased to the current
@@ -137,6 +146,8 @@ responsive.
 | Trees | [OpenStreetMap](https://www.openstreetmap.org) via Overpass | None | Free | Best-effort, 4 s cap |
 | Basemap | [OpenFreeMap](https://openfreemap.org) | None | Free | "liberty" style |
 | Geocoding | [Photon](https://photon.komoot.io) | None | Free | Debounced, one request per pause in typing |
+| Terrain | [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) | None | Free | One request per scene |
+| Time zones | `tz-lookup` (bundled) | None | Offline | No network |
 | Sun position | NOAA / Meeus equations | — | — | Local, no network |
 
 **Full licence details and required attributions: [ATTRIBUTION.md](ATTRIBUTION.md).**

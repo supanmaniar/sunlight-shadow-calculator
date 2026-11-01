@@ -77,6 +77,110 @@ type BuildingFeature = {
   min_height?: number;
 };
 
+/**
+ * Land-cover kinds that represent tree canopy. Protomaps has no individual tree
+ * layer, but these polygons are real OSM vegetation areas, and unlike Overpass
+ * they arrive in the same request as the buildings — no rate limit, no timeout.
+ */
+const CANOPY_KINDS = new Set(["wood", "scrub", "forest", "orchard"]);
+
+/** Average canopy height per kind, in metres. */
+const CANOPY_HEIGHT: Record<string, number> = {
+  wood: 14,
+  forest: 16,
+  scrub: 3,
+  orchard: 5,
+};
+
+/** Decode one MVT tile into tree-canopy areas, sampled as individual crowns. */
+export function decodeCanopyTile(
+  data: ArrayBuffer,
+  tile: { x: number; y: number; z: number },
+): Tree[] {
+  const vectorTile = new VectorTile(new PbfReader(new Uint8Array(data)));
+  const layer = vectorTile.layers.landuse;
+  if (!layer) return [];
+
+  const trees: Tree[] = [];
+  const extent = layer.extent;
+  let nextId = 0;
+
+  const toLngLat = (point: { x: number; y: number }): LngLat => {
+    const lng = ((tile.x + point.x / extent) / 2 ** tile.z) * 360 - 180;
+    const latRad = Math.atan(
+      Math.sinh(Math.PI * (1 - (2 * (tile.y + point.y / extent)) / 2 ** tile.z)),
+    );
+    return [lng, (latRad * 180) / Math.PI];
+  };
+
+  for (let i = 0; i < layer.length; i += 1) {
+    const feature = layer.feature(i);
+    const props = feature.properties as { kind?: string };
+    if (!props.kind || !CANOPY_KINDS.has(props.kind)) continue;
+    if (feature.type !== 3) continue;
+
+    const rings = feature.loadGeometry();
+    if (rings.length === 0) continue;
+    const outer = rings[0];
+    if (outer.length < 3) continue;
+
+    const polygon = outer.map(toLngLat);
+
+    // Sample crowns on a grid inside the polygon's bounding box. A canopy area
+    // is modelled as a cluster of trees rather than one giant blob, so the
+    // shadow it casts has texture instead of a single hard edge.
+    let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+    for (const [lng, lat] of polygon) {
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+
+    const height = CANOPY_HEIGHT[props.kind] ?? 10;
+    const crownRadius = Math.max(2, height * 0.35);
+    const metresPerDegLat = 111_320;
+    const metresPerDegLng = 111_320 * Math.cos((((minLat + maxLat) / 2) * Math.PI) / 180);
+    const widthM = (maxLng - minLng) * metresPerDegLng;
+    const heightM = (maxLat - minLat) * metresPerDegLat;
+
+    // One crown per ~12 m cell, capped so a huge wood does not explode the scene.
+    const stepM = 12;
+    const columns = Math.max(1, Math.min(14, Math.round(widthM / stepM)));
+    const rows = Math.max(1, Math.min(14, Math.round(heightM / stepM)));
+
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const lng = minLng + ((maxLng - minLng) * (column + 0.5)) / columns;
+        const lat = minLat + ((maxLat - minLat) * (row + 0.5)) / rows;
+        if (!pointInPolygon(lng, lat, polygon)) continue;
+        trees.push({
+          id: nextId++,
+          center: [lng, lat],
+          height,
+          crownRadius,
+        });
+      }
+    }
+  }
+
+  return trees;
+}
+
+/** Ray-casting point-in-polygon test. */
+function pointInPolygon(lng: number, lat: number, polygon: LngLat[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    const intersects =
+      yi > lat !== yj > lat &&
+      lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
 /** Decode one MVT tile into building footprints. */
 export function decodeBuildingTile(
   data: ArrayBuffer,
@@ -150,14 +254,41 @@ export async function loadBuildings(
   return results.flat();
 }
 
-/** Scene data for a location, using Protomaps buildings and no trees. */
+/** Load tree-canopy areas within `radius` metres of a point. */
+export async function loadCanopy(
+  longitude: number,
+  latitude: number,
+  radiusMetres: number,
+): Promise<Tree[]> {
+  const pm = getArchive();
+  const tiles = tilesCoveringRadius(
+    longitude,
+    latitude,
+    radiusMetres,
+    BUILDING_ZOOM,
+  );
+
+  const results = await Promise.all(
+    tiles.map(async (tile) => {
+      const data = await pm.getZxy(tile.z, tile.x, tile.y);
+      if (!data) return [];
+      return decodeCanopyTile(data.data, tile);
+    }),
+  );
+
+  return results.flat();
+}
+
+/** Scene data for a location: Protomaps buildings plus tree canopy. */
 export async function loadScene(
   longitude: number,
   latitude: number,
   radiusMetres: number,
 ): Promise<SceneData> {
-  const buildings = await loadBuildings(longitude, latitude, radiusMetres);
-  const trees: Tree[] = [];
+  const [buildings, trees] = await Promise.all([
+    loadBuildings(longitude, latitude, radiusMetres),
+    loadCanopy(longitude, latitude, radiusMetres),
+  ]);
 
   return {
     center: [longitude, latitude],

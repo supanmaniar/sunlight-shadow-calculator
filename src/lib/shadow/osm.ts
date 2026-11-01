@@ -22,6 +22,17 @@ export type SceneData = {
   trees: Tree[];
   fetchedAt: string;
   source: "overpass" | "protomaps";
+  /**
+   * Ground elevation in metres at the scene centre, and the local relief
+   * (highest minus lowest) across the sampled area. Optional because terrain
+   * is best-effort: the scene still renders on flat ground without it.
+   */
+  terrain?: {
+    elevation: number;
+    relief: number;
+    min: number;
+    max: number;
+  };
 };
 
 const DEFAULT_BUILDING_HEIGHT = 8;

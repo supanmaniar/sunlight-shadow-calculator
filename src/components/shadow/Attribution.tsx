@@ -47,9 +47,15 @@ const CREDITS: Credit[] = [
     licence: "ODbL 1.0",
   },
   {
+    name: "AWS Terrain Tiles",
+    href: "https://registry.opendata.aws/terrain-tiles/",
+    role: "Ground elevation",
+    licence: "Open data",
+  },
+  {
     name: "Overpass API",
     href: "https://overpass-api.de",
-    role: "Tree data enrichment",
+    role: "Tree data (legacy)",
     licence: "ODbL 1.0",
   },
   {

@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import {
-  buildOverpassQuery,
-  parseOverpassResponse,
-  type SceneData,
-} from "@/lib/shadow/osm";
+import type { SceneData } from "@/lib/shadow/osm";
 import { getBundledScene } from "@/lib/shadow/fallback";
 import { loadScene as loadPmtilesScene } from "@/lib/shadow/pmtiles";
+import { elevationAtPoint, loadElevationGrid } from "@/lib/shadow/terrain";
 
 const MAX_RADIUS = 2000;
 const MIN_RADIUS = 50;
@@ -46,32 +43,25 @@ function parseNumber(value: string | null): number | null {
 }
 
 /**
- * Overpass is the only source with individual trees, so it is used to enrich
- * the Protomaps buildings. Failure is non-fatal: buildings still render.
+ * Ground elevation for the scene centre. Best-effort: terrain tiles are a
+ * separate service, and a failure must not stop buildings from rendering.
  */
-async function fetchTrees(
+async function fetchTerrain(
   latitude: number,
   longitude: number,
   radius: number,
-): Promise<SceneData["trees"]> {
-  const query = buildOverpassQuery(latitude, longitude, radius);
-
+): Promise<SceneData["terrain"]> {
   try {
-    const response = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent":
-          "SunlightShadowCalculator/1.0 (+https://github.com/supanmaniar/sunlight-shadow-calculator)",
-      },
-      body: new URLSearchParams({ data: query }),
-      // Trees are a nice-to-have; never let them delay the buildings.
-      signal: AbortSignal.timeout(4_000),
-    });
-    if (!response.ok) return [];
-    return parseOverpassResponse(await response.json()).trees;
+    const grid = await loadElevationGrid(longitude, latitude, radius, 24);
+    if (!grid) return undefined;
+    return {
+      elevation: Math.round(elevationAtPoint(grid, longitude, latitude) * 10) / 10,
+      relief: Math.round((grid.max - grid.min) * 10) / 10,
+      min: Math.round(grid.min * 10) / 10,
+      max: Math.round(grid.max * 10) / 10,
+    };
   } catch {
-    return [];
+    return undefined;
   }
 }
 
@@ -115,11 +105,13 @@ export async function GET(request: Request) {
   // covers the whole planet via HTTP range requests.
   try {
     // Buildings and trees are independent, so fetch them concurrently.
-    const [scene, trees] = await Promise.all([
+    // Buildings and tree canopy both come from Protomaps in one pass, so
+    // there is no second service to wait on or be rate-limited by.
+    const [scene, terrain] = await Promise.all([
       loadPmtilesScene(longitude, latitude, radius),
-      fetchTrees(latitude, longitude, radius),
+      fetchTerrain(latitude, longitude, radius),
     ]);
-    const enriched: SceneData = { ...scene, trees };
+    const enriched: SceneData = { ...scene, terrain };
 
     writeCache(key, enriched);
     return NextResponse.json(enriched, {

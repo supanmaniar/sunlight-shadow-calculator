@@ -125,3 +125,33 @@ export function buildSunPath(
 
   return points;
 }
+
+/**
+ * Sun paths for several dates, so the seasonal drift is visible at a glance.
+ *
+ * Photographers plan weeks or months ahead: seeing that the sun sets 40° further
+ * north in June than in December is the whole point of a date range.
+ *
+ * Returns one LineString per sampled date, plus the date it represents so the
+ * caller can label or colour them.
+ */
+export function buildSunPathRange(
+  latitude: number,
+  longitude: number,
+  dates: string[],
+  positionAt: (date: Date) => { azimuth: number; elevation: number },
+  radiusMetres = 120,
+): { date: string; points: LngLat[] }[] {
+  return dates.map((date) => ({
+    date,
+    points: buildSunPath(latitude, longitude, date, positionAt, radiusMetres),
+  }));
+}
+
+/** Evenly spaced dates across a year, e.g. the 21st of each month. */
+export function monthlyDates(year: number): string[] {
+  return Array.from({ length: 12 }, (_, month) => {
+    const mm = String(month + 1).padStart(2, "0");
+    return `${year}-${mm}-21`;
+  });
+}
