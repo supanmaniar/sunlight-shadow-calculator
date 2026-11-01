@@ -73,6 +73,15 @@ describe("buildingShadow", () => {
     [0, 0.0001],
   ];
 
+  const totalArea = (polygons: { outer: LngLat[]; holes: LngLat[][] }[]) =>
+    polygons.reduce(
+      (sum, p) =>
+        sum +
+        polygonArea(p.outer) -
+        p.holes.reduce((h, hole) => h + polygonArea(hole), 0),
+      0,
+    );
+
   it("returns null when the sun is below the horizon", () => {
     expect(buildingShadow(square, 20, 180, -1)).toBeNull();
   });
@@ -84,14 +93,46 @@ describe("buildingShadow", () => {
   it("produces a polygon larger than the footprint", () => {
     const shadow = buildingShadow(square, 20, 180, 30);
     expect(shadow).not.toBeNull();
-    expect(polygonArea(shadow!)).toBeGreaterThan(polygonArea(square));
+    expect(totalArea(shadow!)).toBeGreaterThan(polygonArea(square));
   });
 
   it("extends the shadow away from the sun", () => {
     // Sun due south (180°) → shadow extends north (higher latitude).
     const shadow = buildingShadow(square, 20, 180, 30)!;
-    const maxLat = Math.max(...shadow.map((p) => p[1]));
+    const maxLat = Math.max(...shadow[0].outer.map((p) => p[1]));
     expect(maxLat).toBeGreaterThan(0.0001);
+  });
+
+  it("sweeps a convex footprint exactly", () => {
+    // 20 m tall, sun 45° up: shadow length equals height, so the swept area is
+    // footprint + 20 m * width.
+    const width = 0.0001 * metresPerDegreeLng(0);
+    const shadow = buildingShadow(square, 20, 180, 45)!;
+    const expected = polygonArea(square) + 20 * width;
+    expect(totalArea(shadow)).toBeCloseTo(expected, -1);
+  });
+
+  it("does not fill the concavity of an L-shaped footprint", () => {
+    // L-shape: a 20x20 square with a 10x10 quadrant removed.
+    const scale = 1 / 111_320; // metres → degrees at the equator
+    const lng = (m: number) => m * scale;
+    const lat = (m: number) => m * scale;
+    const lShape: LngLat[] = [
+      [lng(0), lat(0)],
+      [lng(20), lat(0)],
+      [lng(20), lat(10)],
+      [lng(10), lat(10)],
+      [lng(10), lat(20)],
+      [lng(0), lat(20)],
+    ];
+    const footprintArea = polygonArea(lShape);
+    expect(footprintArea).toBeCloseTo(300, -1);
+
+    // Short sweep (5 m) — the hull would fill the notch and read ~450 m².
+    const shadow = buildingShadow(lShape, 5, 180, 45)!;
+    const area = totalArea(shadow);
+    expect(area).toBeLessThan(400);
+    expect(area).toBeGreaterThan(footprintArea);
   });
 });
 

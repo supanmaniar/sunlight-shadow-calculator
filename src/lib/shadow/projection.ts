@@ -8,10 +8,13 @@
  *   dy = h / tan(elevation) * cos(azimuth)
  *
  * where azimuth is degrees clockwise from north and the result is in metres
- * east/north. The shadow polygon is the convex hull of the original footprint
- * and the translated footprint, which is exact for convex footprints and a
- * good approximation for the concave ones typical of OSM buildings.
+ * east/north. The shadow region is the footprint swept along that vector. For
+ * convex footprints this equals the convex hull of the footprint and its
+ * translation; concave footprints are swept exactly so their concavity is not
+ * filled in.
  */
+
+import polygonClipping from "polygon-clipping";
 
 export type LngLat = [number, number];
 
@@ -89,16 +92,51 @@ export function convexHull(points: LngLat[]): LngLat[] {
   return lower.concat(upper);
 }
 
+/** A shadow polygon: one outer ring plus any interior holes. */
+export type ShadowPolygon = { outer: LngLat[]; holes: LngLat[][] };
+
+/** Above this vertex count the exact sweep is skipped in favour of the hull. */
+const MAX_SWEEP_VERTICES = 120;
+
+function toMetres(point: LngLat, origin: LngLat): [number, number] {
+  return [
+    (point[0] - origin[0]) * metresPerDegreeLng(origin[1]),
+    (point[1] - origin[1]) * METRES_PER_DEGREE_LAT,
+  ];
+}
+
+function fromMetres(point: [number, number], origin: LngLat): LngLat {
+  return [
+    origin[0] + point[0] / metresPerDegreeLng(origin[1]),
+    origin[1] + point[1] / METRES_PER_DEGREE_LAT,
+  ];
+}
+
+/** True when the ring equals its own convex hull, i.e. it has no concavity. */
+function isConvexRing(ring: LngLat[]): boolean {
+  const hull = convexHull(ring);
+  if (hull.length < 3) return false;
+  return polygonArea(hull) <= polygonArea(ring) * 1.001;
+}
+
 /**
- * Shadow footprint for a building outline. Returns `null` when the sun is at or
- * below the horizon, or when the footprint is degenerate.
+ * Shadow footprint for a building outline.
+ *
+ * The true shadow is the footprint swept along the shadow vector, i.e.
+ * `P ∪ (P + v) ∪ ⋃ quads(edge_i, edge_i + v)`. For a convex footprint that
+ * region is exactly the convex hull of `P ∪ (P + v)`, so the cheap hull is
+ * used. For concave footprints the hull fills the concavity and inflates the
+ * shadow, so the exact swept region is computed instead.
+ *
+ * Returns `null` when the sun is at or below the horizon, or when the footprint
+ * is degenerate.
  */
 export function buildingShadow(
   footprint: LngLat[],
   height: number,
   azimuth: number,
   elevation: number,
-): LngLat[] | null {
+): ShadowPolygon[] | null {
   if (elevation <= 0 || height <= 0 || footprint.length < 3) return null;
 
   const { east, north } = shadowOffset(height, azimuth, elevation);
@@ -109,7 +147,46 @@ export function buildingShadow(
   );
 
   const hull = convexHull(footprint.concat(translated));
-  return hull.length >= 3 ? hull : null;
+  if (hull.length < 3) return null;
+
+  if (isConvexRing(footprint) || footprint.length > MAX_SWEEP_VERTICES) {
+    return [{ outer: hull, holes: [] }];
+  }
+
+  const origin = footprint[0];
+  const base = footprint.map((point) => toMetres(point, origin));
+  const moved = base.map((point): [number, number] => [
+    point[0] + east,
+    point[1] + north,
+  ]);
+
+  const parts: [number, number][][][] = [[base], [moved]];
+  for (let i = 0; i < base.length; i += 1) {
+    const j = (i + 1) % base.length;
+    parts.push([[base[i], base[j], moved[j], moved[i], base[i]]]);
+  }
+
+  let unioned: [number, number][][][];
+  try {
+    unioned = polygonClipping.union(parts[0], ...parts.slice(1));
+  } catch {
+    // Degenerate geometry: fall back to the hull rather than dropping the shadow.
+    return [{ outer: hull, holes: [] }];
+  }
+
+  const polygons: ShadowPolygon[] = [];
+  for (const polygon of unioned) {
+    const [outerRing, ...holeRings] = polygon;
+    if (!outerRing || outerRing.length < 3) continue;
+    polygons.push({
+      outer: outerRing.map((point) => fromMetres(point, origin)),
+      holes: holeRings
+        .filter((ring) => ring.length >= 3)
+        .map((ring) => ring.map((point) => fromMetres(point, origin))),
+    });
+  }
+
+  return polygons.length > 0 ? polygons : [{ outer: hull, holes: [] }];
 }
 
 /** Circular shadow footprint for a tree of a given crown radius. */

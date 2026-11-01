@@ -4,7 +4,9 @@ import { buildingShadow, treeShadow, type LngLat } from "./projection";
 export type ShadowFeature = {
   type: "Feature";
   properties: { kind: "building" | "tree"; height: number };
-  geometry: { type: "Polygon"; coordinates: LngLat[][] };
+  geometry:
+    | { type: "Polygon"; coordinates: LngLat[][] }
+    | { type: "MultiPolygon"; coordinates: LngLat[][][] };
 };
 
 export type ShadowCollection = {
@@ -23,17 +25,31 @@ export function buildShadowCollection(
 
   if (elevation > 0) {
     for (const building of buildings) {
-      const polygon = buildingShadow(
+      // Only the part above `min_height` casts a shadow: a 6 m element sitting
+      // on top of a 101 m podium must not draw a 107 m shadow.
+      const castingHeight = Math.max(0, building.height - building.minHeight);
+      if (castingHeight <= 0) continue;
+
+      const polygons = buildingShadow(
         building.footprint,
-        building.height,
+        castingHeight,
         azimuth,
         elevation,
       );
-      if (!polygon) continue;
+      if (!polygons || polygons.length === 0) continue;
+
+      const rings = polygons.map((polygon) => [
+        [...polygon.outer, polygon.outer[0]],
+        ...polygon.holes.map((hole) => [...hole, hole[0]]),
+      ]);
+
       features.push({
         type: "Feature",
-        properties: { kind: "building", height: building.height },
-        geometry: { type: "Polygon", coordinates: [[...polygon, polygon[0]]] },
+        properties: { kind: "building", height: castingHeight },
+        geometry:
+          rings.length === 1
+            ? { type: "Polygon", coordinates: rings[0] }
+            : { type: "MultiPolygon", coordinates: rings },
       });
     }
 

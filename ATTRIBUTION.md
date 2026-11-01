@@ -118,6 +118,9 @@ against NOAA reference values in
 | [PMTiles](https://github.com/protomaps/PMTiles) | BSD-3-Clause | PMTiles archive reader |
 | [@mapbox/vector-tile](https://github.com/mapbox/vector-tile-js) | BSD-3-Clause | MVT decoding |
 | [pbf](https://github.com/mapbox/pbf) | BSD-3-Clause | Protocol buffer decoding |
+| [polygon-clipping](https://github.com/mfogel/polygon-clipping) | MIT | Exact swept-region union for concave building shadows |
+| [tz-lookup](https://github.com/darkskyapp/tz-lookup-oss) | CC0-1.0 | Offline time-zone lookup (DST-correct local times) |
+| [pngjs](https://github.com/pngjs/pngjs) | MIT | Terrarium terrain tile decoding |
 | [Tailwind CSS](https://tailwindcss.com) | MIT | Styling |
 | [Vitest](https://vitest.dev) | MIT | Unit testing |
 | [TypeScript](https://www.typescriptlang.org) | Apache-2.0 | Type system |
