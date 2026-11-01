@@ -84,8 +84,11 @@ function ShadowExplorerClient() {
     error: string | null;
   }>({ key: "", data: null, error: null });
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<GeocodeResult[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [searchState, setSearchState] = useState<{
+    query: string;
+    results: GeocodeResult[];
+  }>({ query: "", results: [] });
+  const [activeIndex, setActiveIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const [playing, setPlaying] = useState(false);
 
@@ -169,21 +172,52 @@ function ShadowExplorerClient() {
     return () => clearInterval(id);
   }, [playing, setState]);
 
-  const runSearch = async () => {
-    setSearching(true);
-    try {
-      setResults(await geocode(query));
-    } catch {
-      setResults([]);
-    } finally {
-      setSearching(false);
-    }
-  };
+  // Debounced search-as-you-type. Photon tolerates partial words, so results
+  // appear while typing instead of only on Enter. Each keystroke aborts the
+  // previous request so a slow response can never overwrite a newer one.
+  //
+  // The requested query is stored alongside the results, so "is a search in
+  // flight" and "are these results stale" are derived rather than set in the
+  // effect body.
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) return;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      geocode(trimmed, { latitude: state.lat, longitude: state.lng }, controller.signal)
+        .then((found) => {
+          setSearchState({ query: trimmed, results: found });
+          setActiveIndex(0);
+        })
+        .catch((error: unknown) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          setSearchState({ query: trimmed, results: [] });
+        });
+    }, 220);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+    // `state.lat`/`state.lng` are read as a bias only; re-running on every
+    // camera move would spam the geocoder, so they are intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  const trimmedQuery = query.trim();
+  const results = searchState.query === trimmedQuery ? searchState.results : [];
+  const searching = trimmedQuery.length >= 2 && searchState.query !== trimmedQuery;
 
   const goTo = (lat: number, lng: number) => {
     setState((prev) => ({ ...prev, lat, lng }));
-    setResults([]);
+    setSearchState({ query: "", results: [] });
     setQuery("");
+    setActiveIndex(0);
+  };
+
+  const chooseResult = (result: GeocodeResult) => {
+    goTo(result.latitude, result.longitude);
   };
 
   const copyLink = async () => {
@@ -233,31 +267,64 @@ function ShadowExplorerClient() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") void runSearch();
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setActiveIndex((index) =>
+                    results.length === 0 ? 0 : (index + 1) % results.length,
+                  );
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setActiveIndex((index) =>
+                    results.length === 0
+                      ? 0
+                      : (index - 1 + results.length) % results.length,
+                  );
+                } else if (event.key === "Enter") {
+                  event.preventDefault();
+                  const chosen = results[activeIndex];
+                  if (chosen) chooseResult(chosen);
+                } else if (event.key === "Escape") {
+                  setQuery("");
+                  setSearchState({ query: "", results: [] });
+                }
               }}
-              placeholder="Search a place…"
-              className="w-56 rounded-lg border border-stone-700 bg-stone-900/85 px-3 py-2 text-sm outline-none backdrop-blur placeholder:text-stone-500 focus:border-amber-500"
+              placeholder="Search a place or paste coordinates…"
+              aria-label="Search a place or paste coordinates"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-64 rounded-lg border border-stone-700 bg-stone-900/85 px-3 py-2 text-sm outline-none backdrop-blur placeholder:text-stone-500 focus:border-amber-500"
             />
             <button
               type="button"
-              onClick={() => void runSearch()}
-              disabled={searching}
+              onClick={() => {
+                const chosen = results[activeIndex];
+                if (chosen) chooseResult(chosen);
+              }}
+              disabled={searching || results.length === 0}
               className="rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-stone-950 transition-colors hover:bg-amber-400 disabled:opacity-50"
             >
-              {searching ? "…" : "Search"}
+              {searching ? "…" : "Go"}
             </button>
           </div>
 
           {results.length > 0 && (
-            <ul className="max-h-56 w-80 overflow-auto rounded-lg border border-stone-700 bg-stone-900/95 text-sm backdrop-blur">
-              {results.map((result) => (
-                <li key={`${result.latitude},${result.longitude}`}>
+            <ul className="max-h-64 w-80 overflow-auto rounded-lg border border-stone-700 bg-stone-900/95 text-sm shadow-xl backdrop-blur">
+              {results.map((result, index) => (
+                <li key={`${result.latitude},${result.longitude},${result.label}`}>
                   <button
                     type="button"
-                    onClick={() => goTo(result.latitude, result.longitude)}
-                    className="w-full px-3 py-2 text-left hover:bg-stone-800"
+                    onClick={() => chooseResult(result)}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    className={`w-full px-3 py-2 text-left transition-colors ${
+                      index === activeIndex ? "bg-stone-800" : "hover:bg-stone-800"
+                    }`}
                   >
-                    {result.label}
+                    <span className="block truncate font-medium">{result.label}</span>
+                    {result.detail && (
+                      <span className="block truncate text-xs text-stone-400">
+                        {result.detail}
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}

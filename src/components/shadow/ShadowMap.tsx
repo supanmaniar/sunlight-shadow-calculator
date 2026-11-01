@@ -186,12 +186,16 @@ export function ShadowMap({
     map.setVerticalFieldOfView(fov);
   }, [fov, ready]);
 
-  // Recenter when the location changes.
+  // Recenter when the location changes. Depend on the coordinates rather than
+  // the array, because the parent builds a fresh array on every render — that
+  // would re-run easeTo on every camera move and fight the user's panning.
+  const centerLng = center[0];
+  const centerLat = center[1];
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    map.easeTo({ center, duration: 800 });
-  }, [center]);
+    map.easeTo({ center: [centerLng, centerLat], duration: 800 });
+  }, [centerLng, centerLat]);
 
   // Push scene geometry into the map.
   useEffect(() => {

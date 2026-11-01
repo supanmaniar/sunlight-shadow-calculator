@@ -50,16 +50,21 @@ control both satisfy this.
 
 ## Services
 
-### Nominatim
+### Photon (komoot)
 
-- **Provides:** forward geocoding for the place search box.
-- **Licence:** ODbL 1.0 (data)
-- **Link:** https://nominatim.org
-- **Usage policy:** https://operations.osmfoundation.org/policies/nominatim/
+- **Provides:** search-as-you-type place lookup for the search box, including
+  partial words and location-biased ranking.
+- **Licence:** ODbL 1.0 (data, from OpenStreetMap)
+- **Link:** https://photon.komoot.io
+- **Source:** https://github.com/komoot/photon
 
-Nominatim's usage policy requires a valid identifying `User-Agent` or `Referer`,
-a maximum of one request per second, and no bulk geocoding. This app issues a
-single request per user search.
+Photon is used instead of Nominatim because the public Nominatim instance
+explicitly forbids autocomplete ("you must not implement such a service on the
+client side using the API"). Photon is built for search-as-you-type. The demo
+server asks that request volume stay reasonable; this app issues one debounced
+request per pause in typing, aborts superseded requests, and can be pointed at a
+self-hosted Photon instance by changing `PHOTON_URL` in
+`src/lib/shadow/geocode.ts`.
 
 ### Overpass API
 

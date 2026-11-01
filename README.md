@@ -33,7 +33,8 @@ where the light will fall.
 - **Trees from OSM** — real tree nodes with crown radius and height.
 - **Shareable URLs** — location, date, time, camera, field of view, and area
   radius are all encoded in the URL.
-- **Place search** — forward geocoding via OpenStreetMap Nominatim.
+- **Place search** — type-ahead geocoding via Photon, biased to the current
+  view. Partial words work, and you can paste coordinates straight in.
 - **Adjustable area** — load 100 m to 2 km around the point (up to ~30,000
   buildings).
 
@@ -133,7 +134,7 @@ responsive.
 | Buildings | [Protomaps](https://protomaps.com) PMTiles | None | Free | No rate limit, range requests |
 | Trees | [OpenStreetMap](https://www.openstreetmap.org) via Overpass | None | Free | Best-effort, 4 s cap |
 | Basemap | [OpenFreeMap](https://openfreemap.org) | None | Free | "liberty" style |
-| Geocoding | [Nominatim](https://nominatim.org) | None | Free | One request per search |
+| Geocoding | [Photon](https://photon.komoot.io) | None | Free | Debounced, one request per pause in typing |
 | Sun position | NOAA / Meeus equations | — | — | Local, no network |
 
 **Full licence details and required attributions: [ATTRIBUTION.md](ATTRIBUTION.md).**
@@ -240,7 +241,7 @@ src/
     │   ├── osm.ts              # Overpass parsing, height inference
     │   ├── geojson.ts          # GeoJSON builders
     │   ├── fallback.ts         # bundled scene lookup
-    │   ├── geocode.ts          # Nominatim search
+    │   ├── geocode.ts          # Photon search + coordinate parsing
     │   └── urlState.ts         # shareable URL encoding
     └── __tests__/              # unit tests
 ```

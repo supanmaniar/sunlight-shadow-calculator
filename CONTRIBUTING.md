@@ -58,7 +58,9 @@ Next.js 16 rejects `new Date()` during prerender. Use the existing
 
 ### Respect the data providers
 
-- Do not increase request rates to Nominatim or Overpass.
+- Do not increase request rates to Photon or Overpass.
+- Do not add autocomplete against the public Nominatim instance; its usage
+  policy forbids it. Photon is used for type-ahead instead.
 - Do not remove or hide attribution. See [ATTRIBUTION.md](ATTRIBUTION.md).
 - Cache aggressively; the scene API already caches for 10 minutes.
 

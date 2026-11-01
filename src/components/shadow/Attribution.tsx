@@ -41,8 +41,8 @@ const CREDITS: Credit[] = [
     licence: "BSD-3-Clause",
   },
   {
-    name: "Nominatim",
-    href: "https://nominatim.org",
+    name: "Photon (komoot)",
+    href: "https://photon.komoot.io",
     role: "Place search geocoding",
     licence: "ODbL 1.0",
   },
