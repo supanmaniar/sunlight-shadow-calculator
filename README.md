@@ -27,7 +27,9 @@ where the light will fall.
 - **Sun path arc and compass** — the day's solar arc with a live sun marker.
 - **Time and date controls** — scrub the day with a slider or press Play to
   watch the shadows sweep across the city.
-- **Camera freedom** — pitch, bearing, zoom, and an adjustable field of view.
+- **Camera freedom** — rotate to any direction with the compass dial, the eight
+  viewpoint buttons, or "Face the sun"; adjust tilt and field of view. The
+  viewpoint is encoded in the URL, so a shared link opens at the same angle.
 - **Golden hour and twilight** — sunrise, sunset, civil/nautical/astronomical
   twilight, and golden/blue hour windows.
 - **Trees from OSM** — real tree nodes with crown radius and height.

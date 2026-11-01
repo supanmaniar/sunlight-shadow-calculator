@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Attribution } from "@/components/shadow/Attribution";
+import { Compass } from "@/components/shadow/Compass";
 import { ShadowMap } from "@/components/shadow/ShadowMap";
 import { geocode, type GeocodeResult } from "@/lib/shadow/geocode";
 import type { SceneData } from "@/lib/shadow/osm";
@@ -25,6 +26,18 @@ const PRESETS = [
   { label: "Canary Wharf", lat: 51.5054, lng: -0.0235 },
   { label: "Vienna", lat: 48.2082, lng: 16.3738 },
   { label: "Times Square", lat: 40.758, lng: -73.9855 },
+];
+
+/** Named camera directions, so a viewpoint can be reached in one click. */
+const VIEWPOINTS = [
+  { label: "N", bearing: 0 },
+  { label: "NE", bearing: 45 },
+  { label: "E", bearing: 90 },
+  { label: "SE", bearing: 135 },
+  { label: "S", bearing: 180 },
+  { label: "SW", bearing: 225 },
+  { label: "W", bearing: 270 },
+  { label: "NW", bearing: 315 },
 ];
 
 function localDateKey(date: Date): string {
@@ -239,6 +252,8 @@ function ShadowExplorerClient() {
           position={position}
           dateKey={state.date}
           fov={state.fov}
+          bearing={state.bearing}
+          pitch={state.pitch}
           positionAt={positionAt}
           onCameraChange={({ pitch, bearing, zoom }) =>
             setState((prev) =>
@@ -506,6 +521,68 @@ function ShadowExplorerClient() {
                 {copied ? "Copied!" : "Copy link"}
               </button>
             </div>
+          </div>
+
+          {/* Camera direction: drag the dial, use the arrow keys, or pick a
+              named viewpoint. Shadows only read correctly from a viewpoint you
+              choose, so this is a first-class control rather than a hidden
+              right-drag gesture. */}
+          <div className="flex flex-wrap items-center gap-4 border-t border-stone-800 pt-3">
+            <Compass
+              bearing={state.bearing}
+              pitch={state.pitch}
+              sunAzimuth={position.azimuth}
+              onChange={(bearing) =>
+                setState((prev) => ({ ...prev, bearing }))
+              }
+              onPitchChange={(pitch) => setState((prev) => ({ ...prev, pitch }))}
+            />
+
+            <div className="flex flex-wrap gap-1">
+              {VIEWPOINTS.map((viewpoint) => (
+                <button
+                  key={viewpoint.label}
+                  type="button"
+                  onClick={() =>
+                    setState((prev) => ({ ...prev, bearing: viewpoint.bearing }))
+                  }
+                  aria-pressed={
+                    Math.abs(state.bearing - viewpoint.bearing) < 1
+                  }
+                  className={`w-9 rounded-md border px-1 py-1 text-xs transition-colors ${
+                    Math.abs(state.bearing - viewpoint.bearing) < 1
+                      ? "border-amber-500 bg-amber-500/15 text-amber-300"
+                      : "border-stone-700 hover:border-amber-500 hover:text-amber-300"
+                  }`}
+                >
+                  {viewpoint.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setState((prev) => ({
+                  ...prev,
+                  bearing: Math.round(position.azimuth),
+                }))
+              }
+              className="rounded-lg border border-stone-700 px-2.5 py-1 text-xs hover:border-amber-500 hover:text-amber-300"
+              title="Turn the camera to look towards the sun"
+            >
+              Face the sun
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setState((prev) => ({ ...prev, bearing: -20, pitch: 60 }))
+              }
+              className="rounded-lg border border-stone-700 px-2.5 py-1 text-xs hover:border-amber-500 hover:text-amber-300"
+            >
+              Reset view
+            </button>
           </div>
         </div>
       </div>

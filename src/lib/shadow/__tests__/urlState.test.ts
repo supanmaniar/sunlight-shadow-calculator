@@ -112,3 +112,26 @@ describe("serializeState", () => {
     expect(state.time).toBe(DEFAULT_STATE.time);
   });
 });
+
+describe("camera orientation", () => {
+  it("round-trips bearing and pitch through the URL", () => {
+    const state = { ...DEFAULT_STATE, date: TODAY, bearing: 151, pitch: 20 };
+    const parsed = parse(serializeState(state));
+    expect(parsed.bearing).toBe(151);
+    expect(parsed.pitch).toBe(20);
+  });
+
+  it("keeps a negative bearing", () => {
+    expect(parse("b=-20").bearing).toBe(-20);
+  });
+
+  it("keeps a bearing beyond a full turn", () => {
+    // MapLibre normalises internally; the URL must not silently clamp it.
+    expect(parse("b=540").bearing).toBe(540);
+  });
+
+  it("clamps pitch to the range the map supports", () => {
+    expect(parse("p=120").pitch).toBe(85);
+    expect(parse("p=-10").pitch).toBe(0);
+  });
+});

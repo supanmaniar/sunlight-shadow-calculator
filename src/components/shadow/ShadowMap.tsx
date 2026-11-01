@@ -29,6 +29,8 @@ type ShadowMapProps = {
   position: SunPosition;
   dateKey: string;
   fov: number;
+  bearing: number;
+  pitch: number;
   positionAt: (date: Date) => SunPosition;
   onCameraChange?: (camera: { pitch: number; bearing: number; zoom: number }) => void;
 };
@@ -39,11 +41,16 @@ export function ShadowMap({
   position,
   dateKey,
   fov,
+  bearing,
+  pitch,
   positionAt,
   onCameraChange,
 }: ShadowMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  // True while a camera change we initiated is still animating, so the
+  // resulting moveend is not reported back as a user gesture.
+  const applyingRef = useRef(false);
   // State (not a ref) so the data effects re-run once the style has loaded,
   // even when the scene arrived before the map was ready.
   const [ready, setReady] = useState(false);
@@ -57,8 +64,10 @@ export function ShadowMap({
       style: STYLE_URL,
       center,
       zoom: 16.2,
-      pitch: 60,
-      bearing: -20,
+      // Start from the requested orientation so a shared URL opens at the
+      // viewpoint it encodes, instead of snapping back to a default.
+      pitch,
+      bearing,
       maxPitch: 85,
       attributionControl: { compact: true },
     });
@@ -163,6 +172,10 @@ export function ShadowMap({
 
     map.on("moveend", () => {
       if (!onCameraChange) return;
+      // Ignore the echo of a camera move we started ourselves. Without this,
+      // applying `bearing` from state fires moveend, which writes a new
+      // bearing back to state, which applies it again — an endless loop.
+      if (applyingRef.current) return;
       onCameraChange({
         pitch: map.getPitch(),
         bearing: map.getBearing(),
@@ -185,6 +198,26 @@ export function ShadowMap({
     if (!map || !ready) return;
     map.setVerticalFieldOfView(fov);
   }, [fov, ready]);
+
+  // Apply orientation from state. This is what makes a shared URL restore the
+  // exact viewpoint, and what lets the compass and preset buttons drive the
+  // camera. Skipped when the map already matches, so it never fights a drag.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+
+    const bearingDiff = Math.abs(map.getBearing() - bearing);
+    const pitchDiff = Math.abs(map.getPitch() - pitch);
+    if (bearingDiff < 0.01 && pitchDiff < 0.01) return;
+
+    applyingRef.current = true;
+    map.easeTo({ bearing, pitch, duration: 450 });
+    // Clear the guard once the animation settles, whether or not moveend fires.
+    const timer = setTimeout(() => {
+      applyingRef.current = false;
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [bearing, pitch, ready]);
 
   // Recenter when the location changes. Depend on the coordinates rather than
   // the array, because the parent builds a fresh array on every render — that
