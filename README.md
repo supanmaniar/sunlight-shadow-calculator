@@ -33,6 +33,10 @@ where the light will fall.
 - **Golden hour and twilight** — sunrise, sunset, civil/nautical/astronomical
   twilight, and golden/blue hour windows, in the location's real time zone
   with daylight saving applied.
+- **Day and night rendering** — the scene is lit for the actual sun elevation:
+  neutral and bright at noon, warm and low at golden hour, deep blue at blue
+  hour, and dark at night. A full-day phase strip shows where you are and can
+  be scrubbed directly.
 - **Ground elevation** — real terrain height and local relief, so hills and
   valleys are not flattened.
 - **Year paths** — overlay the sun's arc for the 21st of every month to see how

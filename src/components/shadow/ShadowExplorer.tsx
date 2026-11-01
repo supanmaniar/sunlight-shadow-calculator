@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Attribution } from "@/components/shadow/Attribution";
 import { Compass } from "@/components/shadow/Compass";
+import { PhaseBar } from "@/components/shadow/PhaseBar";
 import { SavedLocations } from "@/components/shadow/SavedLocations";
 import { ShadowMap } from "@/components/shadow/ShadowMap";
 import { geocode, type GeocodeResult } from "@/lib/shadow/geocode";
@@ -21,6 +22,7 @@ import {
   saveLocation,
   type SavedLocation,
 } from "@/lib/savedLocations";
+import { lightPhaseFor, tintFor, warmthFor } from "@/lib/lightPhase";
 import { timeZoneAbbreviation, timeZoneFor } from "@/lib/timeZone";
 import { useNowMs } from "@/lib/useNow";
 
@@ -35,6 +37,17 @@ const PRESETS = [
   { label: "Vienna", lat: 48.2082, lng: 16.3738 },
   { label: "Times Square", lat: 40.758, lng: -73.9855 },
 ];
+
+/** Badge colours per light phase, so the state is readable at a glance. */
+const PHASE_STYLES: Record<string, string> = {
+  day: "bg-yellow-500/20 text-yellow-200",
+  golden: "bg-amber-500/25 text-amber-300",
+  civil: "bg-orange-500/20 text-orange-300",
+  blue: "bg-blue-500/25 text-blue-300",
+  nautical: "bg-indigo-500/20 text-indigo-300",
+  astronomical: "bg-violet-500/20 text-violet-300",
+  night: "bg-slate-600/30 text-slate-300",
+};
 
 /** Named camera directions, so a viewpoint can be reached in one click. */
 const VIEWPOINTS = [
@@ -255,9 +268,14 @@ function ShadowExplorerClient() {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const sunUp = position.elevation > 0;
-  const goldenHour =
-    position.elevation > -0.833 && position.elevation < 6;
+  const dayStart = useMemo(
+    () => zonedTimeToUtc(state.date, "00:00", timeZone),
+    [state.date, timeZone],
+  );
+
+  const light = lightPhaseFor(position.elevation);
+  const warmth = warmthFor(position.elevation);
+  const tint = tintFor(position.elevation);
 
   return (
     <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-stone-950 text-stone-100">
@@ -271,6 +289,10 @@ function ShadowExplorerClient() {
           bearing={state.bearing}
           pitch={state.pitch}
           showYearPaths={showYearPaths}
+          darkness={light.darkness}
+          warmth={warmth}
+          tint={tint.color}
+          tintOpacity={tint.opacity}
           positionAt={positionAt}
           onCameraChange={({ pitch, bearing, zoom }) =>
             setState((prev) =>
@@ -385,15 +407,9 @@ function ShadowExplorerClient() {
         <div className="flex items-center justify-between">
           <span className="text-stone-400">Sun</span>
           <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-              sunUp
-                ? goldenHour
-                  ? "bg-amber-500/20 text-amber-300"
-                  : "bg-yellow-500/20 text-yellow-200"
-                : "bg-slate-500/20 text-slate-300"
-            }`}
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${PHASE_STYLES[light.phase]}`}
           >
-            {sunUp ? (goldenHour ? "Golden hour" : "Daylight") : "Below horizon"}
+            {light.label}
           </span>
         </div>
         <dl className="mt-2 space-y-1 font-mono text-[11px] sm:mt-3 sm:space-y-1.5 sm:text-xs">
@@ -494,6 +510,21 @@ function ShadowExplorerClient() {
               {showMore ? "Less" : "More"}
             </button>
           </div>
+
+          <PhaseBar
+            positionAt={positionAt}
+            dayStart={dayStart}
+            minutes={
+              Number(state.time.split(":")[0]) * 60 +
+              Number(state.time.split(":")[1])
+            }
+            onScrub={(total) =>
+              setState((prev) => ({
+                ...prev,
+                time: `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`,
+              }))
+            }
+          />
 
           <div
             id="more-controls"

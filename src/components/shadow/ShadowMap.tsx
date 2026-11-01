@@ -13,6 +13,7 @@ import {
   monthlyDates,
 } from "@/lib/shadow/geojson";
 import type { SunPosition } from "@/lib/sun";
+import { mixHex } from "@/lib/lightPhase";
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
@@ -44,6 +45,14 @@ type ShadowMapProps = {
   pitch: number;
   /** When true, draw the sun path for the 21st of every month. */
   showYearPaths: boolean;
+  /** 0 = full daylight, 1 = full night. Drives ambient light and sky. */
+  darkness: number;
+  /** 0 = neutral, 1 = deep sunset warmth. */
+  warmth: number;
+  /** Atmospheric wash colour, interpolated from the sun's elevation. */
+  tint: string;
+  /** Strength of the wash, 0..1. */
+  tintOpacity: number;
   positionAt: (date: Date) => SunPosition;
   onCameraChange?: (camera: { pitch: number; bearing: number; zoom: number }) => void;
 };
@@ -57,6 +66,10 @@ export function ShadowMap({
   bearing,
   pitch,
   showYearPaths,
+  darkness,
+  warmth,
+  tint,
+  tintOpacity,
   positionAt,
   onCameraChange,
 }: ShadowMapProps) {
@@ -94,6 +107,17 @@ export function ShadowMap({
       if (map.getLayer("building-3d")) {
         map.setLayoutProperty("building-3d", "visibility", "none");
       }
+
+      // Full-screen tint used to darken the basemap at night. Added first so
+      // it sits beneath the buildings and shadows.
+      map.addLayer({
+        id: "night-overlay",
+        type: "background",
+        paint: {
+          "background-color": "#0b1220",
+          "background-opacity": 0,
+        },
+      });
 
       map.addSource("scene-buildings", { type: "geojson", data: EMPTY });
       map.addSource("scene-trees", { type: "geojson", data: EMPTY });
@@ -224,6 +248,59 @@ export function ShadowMap({
     if (!map || !ready) return;
     map.setVerticalFieldOfView(fov);
   }, [fov, ready]);
+
+  // Lighting: tint the basemap, dim the buildings and fade the shadows as the
+  // sun sets. Without this the scene looks identical at noon and midnight.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+
+    // Sky and ground tint. MapLibre's `sky` spec only affects the atmosphere
+    // above the horizon, so the basemap itself is dimmed with a raster-free
+    // approach: a full-screen overlay layer.
+    const overlay = map.getLayer("night-overlay");
+    if (overlay) {
+      map.setPaintProperty("night-overlay", "background-color", tint);
+      map.setPaintProperty("night-overlay", "background-opacity", tintOpacity);
+    }
+
+    // Buildings: warm and bright by day, cool and dim at night.
+    const dayLow = "#e7e5e4";
+    const dayMid = "#d6d3d1";
+    const dayHigh = "#a8a29e";
+    const nightLow = "#2b3444";
+    const nightMid = "#232b39";
+    const nightHigh = "#1a212c";
+
+    // Warm the daylight colours slightly during golden hour.
+    const warm = (hex: string) => mixHex(hex, "#f0b070", warmth * 0.35);
+
+    map.setPaintProperty("scene-buildings", "fill-extrusion-color", [
+      "interpolate",
+      ["linear"],
+      ["get", "height"],
+      0,
+      mixHex(warm(dayLow), nightLow, darkness),
+      40,
+      mixHex(warm(dayMid), nightMid, darkness),
+      120,
+      mixHex(warm(dayHigh), nightHigh, darkness),
+    ]);
+
+    // Shadows soften and disappear once the sun is down.
+    map.setPaintProperty(
+      "scene-shadows",
+      "fill-opacity",
+      Math.max(0, 0.55 * (1 - darkness * 1.6)),
+    );
+
+    // Trees darken too.
+    map.setPaintProperty(
+      "scene-trees",
+      "circle-color",
+      mixHex("#4d7c0f", "#16210a", darkness),
+    );
+  }, [darkness, warmth, tint, tintOpacity, ready]);
 
   // Apply orientation from state. This is what makes a shared URL restore the
   // exact viewpoint, and what lets the compass and preset buttons drive the
