@@ -7,6 +7,8 @@
 Visualize real sunlight and shadow conditions in 3D. Plan photo shoots, events,
 hikes, and trips around the sun instead of guessing.
 
+### [Open the live app →](https://sunlight-shadow-calculator.vercel.app)
+
 [Features](#features) · [Quick start](#quick-start) · [How it works](#how-it-works) ·
 [API](#api) · [Attribution](ATTRIBUTION.md) · [Contributing](CONTRIBUTING.md)
 
@@ -272,13 +274,21 @@ src/
 
 The app is a standard Next.js project and deploys to any Node host.
 
+### Live instance
+
+**https://sunlight-shadow-calculator.vercel.app**
+
+Hosted on Vercel. Pushes to `main` deploy automatically.
+
 ### Vercel
 
 ```bash
 npx vercel --prod
 ```
 
-No environment variables are required.
+No environment variables are required. The scene route declares
+`maxDuration = 30` because a 2 km scene decodes ~30,000 buildings and waits up
+to 4 s for tree data.
 
 ### Docker
 

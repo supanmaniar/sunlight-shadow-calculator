@@ -39,7 +39,7 @@
     "type": "git",
     "url": "https://github.com/supanmaniar/sunlight-shadow-calculator.git"
   },
-  "homepage": "https://github.com/supanmaniar/sunlight-shadow-calculator",
+  "homepage": "https://sunlight-shadow-calculator.vercel.app",
   "keywords": [
     "sun",
     "shadow",
