@@ -12,6 +12,10 @@ const MIN_RADIUS = 50;
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 60;
 
+// A 2 km scene decodes ~30k buildings and waits up to 4 s for trees, which is
+// close to the default serverless limit. Ask for headroom explicitly.
+export const maxDuration = 30;
+
 type CacheEntry = { data: SceneData; expires: number };
 
 // Module-level cache survives across requests in the same server process.
@@ -57,7 +61,8 @@ async function fetchTrees(
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "ShadowmapExplorer/0.1 (local development)",
+        "User-Agent":
+          "SunlightShadowCalculator/1.0 (+https://github.com/supanmaniar/sunlight-shadow-calculator)",
       },
       body: new URLSearchParams({ data: query }),
       // Trees are a nice-to-have; never let them delay the buildings.
