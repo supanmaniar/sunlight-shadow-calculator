@@ -129,10 +129,53 @@ describe("buildingShadow", () => {
     expect(footprintArea).toBeCloseTo(300, -1);
 
     // Short sweep (5 m) — the hull would fill the notch and read ~450 m².
+    // Exact swept area is footprint + 20 m of swept width * height.
     const shadow = buildingShadow(lShape, 5, 180, 45)!;
-    const area = totalArea(shadow);
-    expect(area).toBeLessThan(400);
-    expect(area).toBeGreaterThan(footprintArea);
+    expect(totalArea(shadow)).toBeCloseTo(300 + 20 * 5, -1);
+  });
+
+  it("sweeps a concave footprint exactly at a long offset", () => {
+    const scale = 1 / 111_320;
+    const lShape: LngLat[] = [
+      [0, 0],
+      [20 * scale, 0],
+      [20 * scale, 10 * scale],
+      [10 * scale, 10 * scale],
+      [10 * scale, 20 * scale],
+      [0, 20 * scale],
+    ];
+    // 50 m tall at 45° → 50 m sweep. Hull would read 1350 m²; exact is 1300 m².
+    const shadow = buildingShadow(lShape, 50, 180, 45)!;
+    expect(totalArea(shadow)).toBeCloseTo(300 + 20 * 50, -1);
+  });
+
+  it("never exceeds the convex hull for any azimuth", () => {
+    // sin(180°) is 1.2e-16, not 0; that dust used to make the clipper throw and
+    // silently revert to the convex hull. The exact sweep must always be a
+    // subset of the hull, and strictly smaller for a concave footprint.
+    const scale = 1 / 111_320;
+    const lShape: LngLat[] = [
+      [0, 0],
+      [20 * scale, 0],
+      [20 * scale, 10 * scale],
+      [10 * scale, 10 * scale],
+      [10 * scale, 20 * scale],
+      [0, 20 * scale],
+    ];
+    let strictlySmaller = 0;
+    for (let azimuth = 0; azimuth < 360; azimuth += 15) {
+      const shadow = buildingShadow(lShape, 30, azimuth, 45);
+      expect(shadow).not.toBeNull();
+      const { east, north } = shadowOffset(30, azimuth, 45);
+      const hull = convexHull(
+        lShape.concat(lShape.map((p) => offsetToLngLat(p, east, north))),
+      );
+      const area = totalArea(shadow!);
+      expect(area).toBeLessThanOrEqual(polygonArea(hull) + 1);
+      if (area < polygonArea(hull) - 1) strictlySmaller += 1;
+    }
+    // Every azimuth except the two axis-aligned ones trims the notch.
+    expect(strictlySmaller).toBeGreaterThanOrEqual(20);
   });
 });
 

@@ -35,9 +35,17 @@ export function shadowOffset(
   // The shadow falls opposite the sun, i.e. along azimuth + 180°.
   const azimuthRad = (azimuth * Math.PI) / 180;
   return {
-    east: -length * Math.sin(azimuthRad),
-    north: -length * Math.cos(azimuthRad),
+    east: snapZero(-length * Math.sin(azimuthRad)),
+    north: snapZero(-length * Math.cos(azimuthRad)),
   };
+}
+
+/**
+ * Round away floating-point dust. `sin(180°)` is `1.2e-16`, not `0`, and that
+ * dust makes the polygon clipper reject otherwise valid input.
+ */
+function snapZero(value: number): number {
+  return Math.abs(value) < 1e-9 ? 0 : value;
 }
 
 /** Convert a local east/north metre offset into a longitude/latitude delta. */
@@ -154,25 +162,16 @@ export function buildingShadow(
   }
 
   const origin = footprint[0];
-  const base = footprint.map((point) => toMetres(point, origin));
+  const base = footprint.map(
+    (point) => toMetres(point, origin).map(snapZero) as [number, number],
+  );
   const moved = base.map((point): [number, number] => [
-    point[0] + east,
-    point[1] + north,
+    snapZero(point[0] + east),
+    snapZero(point[1] + north),
   ]);
 
-  const parts: [number, number][][][] = [[base], [moved]];
-  for (let i = 0; i < base.length; i += 1) {
-    const j = (i + 1) % base.length;
-    parts.push([[base[i], base[j], moved[j], moved[i], base[i]]]);
-  }
-
-  let unioned: [number, number][][][];
-  try {
-    unioned = polygonClipping.union(parts[0], ...parts.slice(1));
-  } catch {
-    // Degenerate geometry: fall back to the hull rather than dropping the shadow.
-    return [{ outer: hull, holes: [] }];
-  }
+  const unioned = sweepUnion(base, moved);
+  if (!unioned) return [{ outer: hull, holes: [] }];
 
   const polygons: ShadowPolygon[] = [];
   for (const polygon of unioned) {
@@ -187,6 +186,44 @@ export function buildingShadow(
   }
 
   return polygons.length > 0 ? polygons : [{ outer: hull, holes: [] }];
+}
+
+/**
+ * Union the footprint, its translation and one quad per edge.
+ *
+ * The clipper is sensitive to near-duplicate vertices, so a failed attempt is
+ * retried on a 1 cm grid before giving up. Returns `null` if both attempts
+ * fail, letting the caller fall back to the hull.
+ */
+function sweepUnion(
+  base: [number, number][],
+  moved: [number, number][],
+): [number, number][][][] | null {
+  const build = (quantise: boolean): [number, number][][][] => {
+    const q = (point: [number, number]): [number, number] =>
+      quantise
+        ? [Math.round(point[0] * 100) / 100, Math.round(point[1] * 100) / 100]
+        : point;
+    const b = base.map(q);
+    const m = moved.map(q);
+    const parts: [number, number][][][] = [[b], [m]];
+    for (let i = 0; i < b.length; i += 1) {
+      const j = (i + 1) % b.length;
+      parts.push([[b[i], b[j], m[j], m[i], b[i]]]);
+    }
+    return parts;
+  };
+
+  for (const quantise of [false, true]) {
+    const parts = build(quantise);
+    try {
+      const result = polygonClipping.union(parts[0], ...parts.slice(1));
+      if (result.length > 0) return result;
+    } catch {
+      // Retry on the quantised grid.
+    }
+  }
+  return null;
 }
 
 /** Circular shadow footprint for a tree of a given crown radius. */
